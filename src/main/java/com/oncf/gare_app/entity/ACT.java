@@ -40,15 +40,15 @@ public class ACT {
     @Column(name = "date_derniere_modification")
     private LocalDateTime dateDerniereModification;
 
-//    @OneToMany(mappedBy = "act", cascade = CascadeType.ALL)
-//    private List<LettreSommationBillet> lettresSommationBillet = new ArrayList<>();
-//
-//    @OneToMany(mappedBy = "act", cascade = CascadeType.ALL)
-//    private List<LettreSommationCarte> lettresSommationCarte = new ArrayList<>();
-//
-//    @OneToMany(mappedBy = "act", cascade = CascadeType.ALL)
-//    private List<RapportM> rapportsM = new ArrayList<>();
-//
-//    @OneToOne(mappedBy = "act")
-//    private UtilisateurSysteme utilisateurSysteme;
+    @OneToMany(mappedBy = "act", cascade = CascadeType.ALL)
+    private List<LettreSommationBillet> lettresSommationBillet = new ArrayList<>();
+
+    @OneToMany(mappedBy = "act", cascade = CascadeType.ALL)
+    private List<LettreSommationCarte> lettresSommationCarte = new ArrayList<>();
+
+    @OneToMany(mappedBy = "act", cascade = CascadeType.ALL)
+    private List<RapportM> rapportsM = new ArrayList<>();
+
+    @OneToOne(mappedBy = "act", cascade = CascadeType.ALL)
+    private UtilisateurSysteme utilisateurSysteme;
 }
