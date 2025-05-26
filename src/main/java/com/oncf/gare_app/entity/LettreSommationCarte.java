@@ -5,6 +5,7 @@ import com.oncf.gare_app.enums.TypeDocumentEnum;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JoinFormula;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.Where;
 
@@ -81,31 +82,30 @@ public class LettreSommationCarte {
     @Column(name = "date_derniere_modification")
     private LocalDateTime dateDerniereModification;
 
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
-    @JoinColumn(name = "document_id", referencedColumnName = "id")
-    @Where(clause = "type_document = 'LETTRE_CARTE'")
+    // Make this transient - loaded separately by mapper
+    @Transient
     private List<PieceJointe> piecesJointes = new ArrayList<>();
 
-    /**
-     * Helper method to add a piece jointe to this document
-     */
     public void addPieceJointe(PieceJointe pieceJointe) {
+        if (this.piecesJointes == null) {
+            this.piecesJointes = new ArrayList<>();
+        }
         pieceJointe.setTypeDocument(TypeDocumentEnum.LETTRE_CARTE);
-        pieceJointe.setDocumentId(this.id);
+        if (this.id != null) {
+            pieceJointe.setDocumentId(this.id);
+        }
         this.piecesJointes.add(pieceJointe);
     }
 
-    /**
-     * Helper method to remove a piece jointe from this document
-     */
     public void removePieceJointe(PieceJointe pieceJointe) {
-        this.piecesJointes.remove(pieceJointe);
+        if (this.piecesJointes != null) {
+            this.piecesJointes.remove(pieceJointe);
+        }
     }
 
-    /**
-     * Helper method to clear all pieces jointes from this document
-     */
     public void clearPiecesJointes() {
-        this.piecesJointes.clear();
+        if (this.piecesJointes != null) {
+            this.piecesJointes.clear();
+        }
     }
 }

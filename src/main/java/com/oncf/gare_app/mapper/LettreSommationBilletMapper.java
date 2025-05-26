@@ -2,17 +2,24 @@ package com.oncf.gare_app.mapper;
 
 import com.oncf.gare_app.dto.LettreSommationBilletRequest;
 import com.oncf.gare_app.dto.LettreSommationBilletResponse;
+import com.oncf.gare_app.dto.PieceJointeResponse;
 import com.oncf.gare_app.entity.ACT;
 import com.oncf.gare_app.entity.Gare;
 import com.oncf.gare_app.entity.LettreSommationBillet;
+import com.oncf.gare_app.entity.PieceJointe;
 import com.oncf.gare_app.entity.Train;
 import com.oncf.gare_app.entity.UtilisateurSysteme;
+import com.oncf.gare_app.enums.TypeDocumentEnum;
 import com.oncf.gare_app.repository.ACTRepository;
 import com.oncf.gare_app.repository.GareRepository;
+import com.oncf.gare_app.repository.PieceJointeRepository;
 import com.oncf.gare_app.repository.TrainRepository;
 import org.mapstruct.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Mapper(componentModel = "spring",
         uses = {ACTMapper.class, TrainMapper.class, GareMapper.class, UtilisateurMapper.class, PieceJointeMapper.class})
@@ -27,14 +34,44 @@ public abstract class LettreSommationBilletMapper {
     @Autowired
     protected GareRepository gareRepository;
 
+    // ADD THIS NEW AUTOWIRED FIELD
+    @Autowired
+    protected PieceJointeRepository pieceJointeRepository;
+
+    // ADD THIS NEW AUTOWIRED FIELD
+    @Autowired
+    protected PieceJointeMapper pieceJointeMapper;
+
     @Mapping(target = "piecesJointes", ignore = true)
     public abstract LettreSommationBilletResponse toDto(LettreSommationBillet entity);
+
+    // ADD THIS NEW METHOD - This is the key addition!
+    @AfterMapping
+    protected void loadPiecesJointes(@MappingTarget LettreSommationBilletResponse response, LettreSommationBillet entity) {
+        if (entity.getId() != null) {
+            // Load pieces jointes using the polymorphic relationship
+            List<PieceJointe> piecesJointes = pieceJointeRepository.findByTypeDocumentAndDocumentId(
+                    TypeDocumentEnum.LETTRE_BILLET, entity.getId());
+
+            if (piecesJointes != null && !piecesJointes.isEmpty()) {
+                List<PieceJointeResponse> piecesJointesDto = piecesJointes.stream()
+                        .map(pieceJointeMapper::toDto)
+                        .collect(Collectors.toList());
+
+                response.setPiecesJointes(piecesJointesDto);
+
+                // Log for debugging
+                System.out.println("Loaded " + piecesJointesDto.size() + " pieces jointes for LettreSommationBillet ID: " + entity.getId());
+            }
+        }
+    }
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "act", source = "actId", qualifiedByName = "mapBilletActId")
     @Mapping(target = "train", source = "trainId", qualifiedByName = "mapBilletTrainId")
     @Mapping(target = "gare", source = "gareId", qualifiedByName = "mapBilletGareId")
-    @Mapping(target = "utilisateur", expression = "java(getCurrentUser())")
+    // IMPORTANT CHANGE: Changed from expression to ignore
+    @Mapping(target = "utilisateur", ignore = true)
     @Mapping(target = "dateCreationSysteme", ignore = true)
     @Mapping(target = "dateDerniereModification", ignore = true)
     @Mapping(target = "piecesJointes", ignore = true)
@@ -58,8 +95,16 @@ public abstract class LettreSommationBilletMapper {
                 .orElseThrow(() -> new RuntimeException("Gare non trouvée avec l'id: " + gareId));
     }
 
+    // THIS METHOD IS KEPT FOR REFERENCE BUT IS NO LONGER USED DIRECTLY
+    // It will be helpful when you implement authentication
     protected UtilisateurSysteme getCurrentUser() {
-        return (UtilisateurSysteme) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        try {
+            return (UtilisateurSysteme) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        } catch (ClassCastException e) {
+            // This will only be used once we've changed the mapping to ignore utilisateur
+            System.out.println("Not authenticated with UtilisateurSysteme - this is expected during testing");
+            return null;
+        }
     }
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)

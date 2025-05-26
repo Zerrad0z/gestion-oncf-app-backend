@@ -17,10 +17,9 @@ import com.oncf.gare_app.mapper.PieceJointeMapper;
 import com.oncf.gare_app.repository.LettreSommationBilletRepository;
 import com.oncf.gare_app.repository.PieceJointeRepository;
 import com.oncf.gare_app.repository.UtilisateurSystemeRepository;
-import com.oncf.gare_app.service.FileStorageService;
-import com.oncf.gare_app.service.HistoriqueService;
-import com.oncf.gare_app.service.LettreSommationBilletService;
-import com.oncf.gare_app.service.NotificationService;
+import com.oncf.gare_app.service.*;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -29,13 +28,19 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class LettreSommationBilletServiceImpl implements LettreSommationBilletService {
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
 
     private final LettreSommationBilletRepository lettreSommationBilletRepository;
     private final PieceJointeRepository pieceJointeRepository;
@@ -45,6 +50,7 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
     private final HistoriqueService historiqueService;
     private final NotificationService notificationService;
     private final UtilisateurSystemeRepository utilisateurSystemeRepository;
+    private final FileValidationService fileValidationService;
 
     @Transactional(readOnly = true)
     @Override
@@ -68,56 +74,125 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
     }
 
     // In LettreSommationBilletServiceImpl when creating a new document
+//    @Transactional
+//    @Override
+//    public LettreSommationBilletResponse createLettreSommationBillet(
+//            LettreSommationBilletRequest request, List<MultipartFile> fichiers) {
+//
+//        // Get current user (encadrant)
+//        UtilisateurSysteme currentUser = (UtilisateurSysteme) SecurityContextHolder
+//                .getContext().getAuthentication().getPrincipal();
+//
+//        // Create lettre sommation
+//        LettreSommationBillet lettreSommationBillet = lettreSommationBilletMapper.toEntity(request);
+//        lettreSommationBillet = lettreSommationBilletRepository.save(lettreSommationBillet);
+//
+//        // Process file uploads and other operations...
+//
+//        // Notify supervisors about the new document
+//        if (lettreSommationBillet.getAct() != null &&
+//                lettreSommationBillet.getAct().getAntenne() != null &&
+//                lettreSommationBillet.getAct().getAntenne().getSection() != null) {
+//
+//            List<UtilisateurSysteme> supervisors = utilisateurSystemeRepository
+//                    .findByRoleAndAntenneSection(RoleUtilisateur.SUPERVISEUR,
+//                            lettreSommationBillet.getAct().getAntenne().getSection());
+//
+//            for (UtilisateurSysteme supervisor : supervisors) {
+//                notificationService.createNotification(
+//                        supervisor,
+//                        TypeNotificationEnum.INFO,
+//                        "Nouvelle lettre de sommation (billet) créée pour l'agent " +
+//                                lettreSommationBillet.getAct().getNomPrenom() + " (Matricule: " +
+//                                lettreSommationBillet.getAct().getMatricule() + ")",
+//                        "/documents/lettre-billet/" + lettreSommationBillet.getId()
+//                );
+//            }
+//        }
+//
+//        return lettreSommationBilletMapper.toDto(lettreSommationBillet);
+//    }
+    // Updated createLettreSommationBillet method in LettreSommationBilletServiceImpl
+
+    // Updated createLettreSommationBillet method in LettreSommationBilletServiceImpl
+
     @Transactional
     @Override
     public LettreSommationBilletResponse createLettreSommationBillet(
             LettreSommationBilletRequest request, List<MultipartFile> fichiers) {
 
-        // Get current user (encadrant)
-        UtilisateurSysteme currentUser = (UtilisateurSysteme) SecurityContextHolder
-                .getContext().getAuthentication().getPrincipal();
+        // Get the test user from the database
+        UtilisateurSysteme testUser = utilisateurSystemeRepository.findByNomUtilisateur("testuser")
+                .orElseThrow(() -> new RuntimeException("Test user not found. Please create a 'testuser' in the database."));
 
-        // Create lettre sommation
+        // Create lettre sommation with the test user
         LettreSommationBillet lettreSommationBillet = lettreSommationBilletMapper.toEntity(request);
+        lettreSommationBillet.setUtilisateur(testUser);
+
+        // Save the entity FIRST to get the ID
         lettreSommationBillet = lettreSommationBilletRepository.save(lettreSommationBillet);
 
-        // Process file uploads and other operations...
+        // Force flush to ensure the entity is saved and has an ID
+        entityManager.flush();
 
-        // Notify supervisors about the new document
-        if (lettreSommationBillet.getAct() != null &&
-                lettreSommationBillet.getAct().getAntenne() != null &&
-                lettreSommationBillet.getAct().getAntenne().getSection() != null) {
+        // Log the saved entity for debugging
+        System.out.println("Saved LettreSommationBillet with ID: " + lettreSommationBillet.getId());
 
-            List<UtilisateurSysteme> supervisors = utilisateurSystemeRepository
-                    .findByRoleAndAntenneSection(RoleUtilisateur.SUPERVISEUR,
-                            lettreSommationBillet.getAct().getAntenne().getSection());
+        // Process file uploads if provided
+        if (fichiers != null && !fichiers.isEmpty()) {
+            try {
+                for (MultipartFile fichier : fichiers) {
+                    if (!fichier.isEmpty()) {
+                        // Validate file first
+                        String validationError = fileValidationService.getValidationErrorMessage(fichier);
+                        if (validationError != null) {
+                            throw new RuntimeException("Validation error for file " + fichier.getOriginalFilename() + ": " + validationError);
+                        }
 
-            for (UtilisateurSysteme supervisor : supervisors) {
-                notificationService.createNotification(
-                        supervisor,
-                        TypeNotificationEnum.INFO,
-                        "Nouvelle lettre de sommation (billet) créée pour l'agent " +
-                                lettreSommationBillet.getAct().getNomPrenom() + " (Matricule: " +
-                                lettreSommationBillet.getAct().getMatricule() + ")",
-                        "/documents/lettre-billet/" + lettreSommationBillet.getId()
-                );
+                        // Store file and get path
+                        String fileName = fileStorageService.storeFile(fichier, "lettre-billet-" + lettreSommationBillet.getId());
+
+                        // Create PieceJointe entity - Make sure to use the correct document ID
+                        PieceJointe pieceJointe = PieceJointe.builder()
+                                .typeDocument(TypeDocumentEnum.LETTRE_BILLET)
+                                .documentId(lettreSommationBillet.getId()) // This should be the LettreSommationBillet ID
+                                .nomFichier(fichier.getOriginalFilename())
+                                .cheminFichier(fileName)
+                                .typeMime(fichier.getContentType())
+                                .taille(fichier.getSize())
+                                .dateUpload(LocalDateTime.now())
+                                .build();
+
+                        // Log before saving for debugging
+                        System.out.println("About to save PieceJointe: " +
+                                "TypeDocument: " + pieceJointe.getTypeDocument() +
+                                ", DocumentId: " + pieceJointe.getDocumentId() +
+                                ", FileName: " + pieceJointe.getNomFichier());
+
+                        // Save PieceJointe to database
+                        pieceJointe = pieceJointeRepository.save(pieceJointe);
+
+                        // Log after saving for debugging
+                        System.out.println("Successfully saved PieceJointe with ID: " + pieceJointe.getId());
+                    }
+                }
+
+            } catch (Exception e) {
+                System.err.println("Error during file processing: " + e.getMessage());
+                e.printStackTrace();
+                throw new RuntimeException("Error storing files: " + e.getMessage(), e);
             }
         }
 
+        // Return the DTO - your mapper will handle loading pieces jointes via the @AfterMapping
         return lettreSommationBilletMapper.toDto(lettreSommationBillet);
     }
 
-
-
-
+    // Updated updateLettreSommationBillet method
     @Transactional
     @Override
     public LettreSommationBilletResponse updateLettreSommationBillet(
             Long id, LettreSommationBilletRequest request, List<MultipartFile> fichiers) {
-
-        // Get current user
-        UtilisateurSysteme currentUser = (UtilisateurSysteme) SecurityContextHolder
-                .getContext().getAuthentication().getPrincipal();
 
         LettreSommationBillet lettreSommationBillet = lettreSommationBilletRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lettre de sommation billet non trouvée avec l'id: " + id));
@@ -128,27 +203,38 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
             throw new RuntimeException("Une lettre de sommation billet avec le numéro " + request.getNumeroBillet() + " existe déjà");
         }
 
-        // Store old status for history tracking
-        String oldStatus = lettreSommationBillet.getStatut() != null ?
-                lettreSommationBillet.getStatut().toString() : null;
-
         // Update entity fields
         lettreSommationBilletMapper.updateEntityFromDto(request, lettreSommationBillet);
 
         // Process file uploads if new files were provided
         if (fichiers != null && !fichiers.isEmpty()) {
             try {
-                // Delete existing files from storage
-                for (PieceJointe piece : lettreSommationBillet.getPiecesJointes()) {
-                    fileStorageService.deleteFile(piece.getCheminFichier());
+                // Get existing pieces jointes
+                List<PieceJointe> existingPieces = pieceJointeRepository.findByTypeDocumentAndDocumentId(
+                        TypeDocumentEnum.LETTRE_BILLET, id);
+
+                // Delete existing files from storage and database
+                for (PieceJointe piece : existingPieces) {
+                    try {
+                        fileStorageService.deleteFile(piece.getCheminFichier());
+                    } catch (IOException e) {
+                        // Log but don't fail - file might already be deleted
+                        System.err.println("Could not delete file: " + piece.getCheminFichier());
+                    }
+                    pieceJointeRepository.delete(piece);
                 }
 
-                // Clear the existing pieces jointes
-                lettreSommationBillet.getPiecesJointes().clear();
-
                 // Add new pieces jointes
+                List<PieceJointe> newPiecesJointes = new ArrayList<>();
+
                 for (MultipartFile fichier : fichiers) {
                     if (!fichier.isEmpty()) {
+                        // Validate file
+                        String validationError = fileValidationService.getValidationErrorMessage(fichier);
+                        if (validationError != null) {
+                            throw new RuntimeException("Validation error for file " + fichier.getOriginalFilename() + ": " + validationError);
+                        }
+
                         String fileName = fileStorageService.storeFile(fichier, "lettre-billet-" + id);
 
                         PieceJointe pieceJointe = PieceJointe.builder()
@@ -158,22 +244,18 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
                                 .cheminFichier(fileName)
                                 .typeMime(fichier.getContentType())
                                 .taille(fichier.getSize())
+                                .dateUpload(LocalDateTime.now())
                                 .build();
 
-                        lettreSommationBillet.addPieceJointe(pieceJointe);
+                        // Save to database
+                        pieceJointe = pieceJointeRepository.save(pieceJointe);
+                        newPiecesJointes.add(pieceJointe);
                     }
                 }
 
-                // Track file uploads
-                historiqueService.trackDocumentAction(
-                        TypeDocumentEnum.LETTRE_BILLET,
-                        id,
-                        currentUser,
-                        "Mise à jour des fichiers",
-                        "Nouveaux fichiers ajoutés: " + fichiers.size(),
-                        null,
-                        null
-                );
+                // Update the relationship
+                lettreSommationBillet.setPiecesJointes(newPiecesJointes);
+
             } catch (IOException e) {
                 throw new RuntimeException("Erreur lors de la mise à jour des fichiers", e);
             }
@@ -182,36 +264,7 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
         // Save the updated entity
         lettreSommationBillet = lettreSommationBilletRepository.save(lettreSommationBillet);
 
-        // Track document update
-        historiqueService.trackDocumentUpdate(
-                TypeDocumentEnum.LETTRE_BILLET,
-                id,
-                currentUser,
-                "Mise à jour générale"
-        );
-
-        // Track status change if applicable
-        String newStatus = lettreSommationBillet.getStatut() != null ?
-                lettreSommationBillet.getStatut().toString() : null;
-
-        if (oldStatus != null && newStatus != null && !oldStatus.equals(newStatus)) {
-            historiqueService.trackDocumentStatusChange(
-                    TypeDocumentEnum.LETTRE_BILLET,
-                    lettreSommationBillet.getId(),
-                    currentUser,
-                    oldStatus,
-                    newStatus,
-                    "Changement de statut"
-            );
-
-            // Notify relevant users about status change
-            notifyStatusChange(lettreSommationBillet, oldStatus, newStatus);
-        }
-
-        // Map to response
-        LettreSommationBilletResponse response = lettreSommationBilletMapper.toDto(lettreSommationBillet);
-
-        return response;
+        return lettreSommationBilletMapper.toDto(lettreSommationBillet);
     }
 
     @Transactional
