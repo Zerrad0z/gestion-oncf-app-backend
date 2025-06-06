@@ -21,14 +21,17 @@ import com.oncf.gare_app.service.FileStorageService;
 import com.oncf.gare_app.service.HistoriqueService;
 import com.oncf.gare_app.service.LettreSommationCarteService;
 import com.oncf.gare_app.service.NotificationService;
+import com.oncf.gare_app.service.UtilisateurService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -36,6 +39,9 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class LettreSommationCarteServiceImpl implements LettreSommationCarteService {
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     private final LettreSommationCarteRepository lettreSommationCarteRepository;
     private final PieceJointeRepository pieceJointeRepository;
@@ -45,6 +51,7 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
     private final FileStorageService fileStorageService;
     private final HistoriqueService historiqueService;
     private final NotificationService notificationService;
+    private final UtilisateurService utilisateurService;
 
     @Transactional(readOnly = true)
     @Override
@@ -94,18 +101,68 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
     public LettreSommationCarteResponse createLettreSommationCarte(
             LettreSommationCarteRequest request, List<MultipartFile> fichiers) {
 
-        // Get current user (encadrant)
-        UtilisateurSysteme currentUser = (UtilisateurSysteme) SecurityContextHolder
-                .getContext().getAuthentication().getPrincipal();
+        // Validate permissions and get current user
+        utilisateurService.validateCanCreate();
+        UtilisateurSysteme currentUser = utilisateurService.getCurrentUser();
 
         // Check if a lettre with the same numeroCarte already exists
         if (lettreSommationCarteRepository.existsByNumeroCarte(request.getNumeroCarte())) {
             throw new RuntimeException("Une lettre de sommation carte avec le numéro " + request.getNumeroCarte() + " existe déjà");
         }
 
-        // Create lettre sommation
+        // Create lettre sommation with current user
         LettreSommationCarte lettreSommationCarte = lettreSommationCarteMapper.toEntity(request);
+        lettreSommationCarte.setUtilisateur(currentUser);
+
+        // Save the entity FIRST to get the ID
         lettreSommationCarte = lettreSommationCarteRepository.save(lettreSommationCarte);
+
+        // Force flush to ensure the entity is saved and has an ID
+        entityManager.flush();
+
+        // Log the saved entity for debugging
+        System.out.println("Saved LettreSommationCarte with ID: " + lettreSommationCarte.getId() +
+                " by user: " + currentUser.getNomUtilisateur());
+
+        // Process file uploads if provided
+        if (fichiers != null && !fichiers.isEmpty()) {
+            try {
+                for (MultipartFile fichier : fichiers) {
+                    if (!fichier.isEmpty()) {
+                        // Store file and get path
+                        String fileName = fileStorageService.storeFile(fichier, "lettre-carte-" + lettreSommationCarte.getId());
+
+                        // Create PieceJointe entity
+                        PieceJointe pieceJointe = PieceJointe.builder()
+                                .typeDocument(TypeDocumentEnum.LETTRE_CARTE)
+                                .documentId(lettreSommationCarte.getId())
+                                .nomFichier(fichier.getOriginalFilename())
+                                .cheminFichier(fileName)
+                                .typeMime(fichier.getContentType())
+                                .taille(fichier.getSize())
+                                .dateUpload(LocalDateTime.now())
+                                .build();
+
+                        // Log before saving for debugging
+                        System.out.println("About to save PieceJointe: " +
+                                "TypeDocument: " + pieceJointe.getTypeDocument() +
+                                ", DocumentId: " + pieceJointe.getDocumentId() +
+                                ", FileName: " + pieceJointe.getNomFichier());
+
+                        // Save PieceJointe to database
+                        pieceJointe = pieceJointeRepository.save(pieceJointe);
+
+                        // Log after saving for debugging
+                        System.out.println("Successfully saved PieceJointe with ID: " + pieceJointe.getId());
+                    }
+                }
+
+            } catch (Exception e) {
+                System.err.println("Error during file processing: " + e.getMessage());
+                e.printStackTrace();
+                throw new RuntimeException("Error storing files: " + e.getMessage(), e);
+            }
+        }
 
         // Track document creation
         historiqueService.trackDocumentCreation(
@@ -114,58 +171,11 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
                 currentUser
         );
 
-        // Process file uploads
-        if (fichiers != null && !fichiers.isEmpty()) {
-            try {
-                for (MultipartFile fichier : fichiers) {
-                    if (!fichier.isEmpty()) {
-                        String fileName = fileStorageService.storeFile(fichier, "lettre-carte-" + lettreSommationCarte.getId());
+        // Notify supervisors about new document creation
+        notifyDocumentCreation(lettreSommationCarte);
 
-                        PieceJointe pieceJointe = PieceJointe.builder()
-                                .typeDocument(TypeDocumentEnum.LETTRE_CARTE)
-                                .documentId(lettreSommationCarte.getId())
-                                .nomFichier(fichier.getOriginalFilename())
-                                .cheminFichier(fileName)
-                                .typeMime(fichier.getContentType())
-                                .taille(fichier.getSize())
-                                .build();
-
-                        // Add piece jointe to lettre
-                        lettreSommationCarte.addPieceJointe(pieceJointe);
-                    }
-                }
-
-                // Save the updated entity
-                lettreSommationCarte = lettreSommationCarteRepository.save(lettreSommationCarte);
-            } catch (IOException e) {
-                throw new RuntimeException("Erreur lors de l'enregistrement des fichiers", e);
-            }
-        }
-
-        // Notify supervisors about the new document
-        if (lettreSommationCarte.getAct() != null &&
-                lettreSommationCarte.getAct().getAntenne() != null &&
-                lettreSommationCarte.getAct().getAntenne().getSection() != null) {
-
-            List<UtilisateurSysteme> supervisors = utilisateurSystemeRepository
-                    .findByRoleAndAntenneSection(RoleUtilisateur.SUPERVISEUR,
-                            lettreSommationCarte.getAct().getAntenne().getSection());
-
-            for (UtilisateurSysteme supervisor : supervisors) {
-                notificationService.createNotification(
-                        supervisor,
-                        TypeNotificationEnum.INFO,
-                        "Nouvelle lettre de sommation (carte) créée pour l'agent " +
-                                lettreSommationCarte.getAct().getNomPrenom() + " (Matricule: " +
-                                lettreSommationCarte.getAct().getMatricule() + ")",
-                        "/documents/lettre-carte/" + lettreSommationCarte.getId()
-                );
-            }
-        }
-
-        LettreSommationCarteResponse response = lettreSommationCarteMapper.toDto(lettreSommationCarte);
-
-        return response;
+        // Return the DTO
+        return lettreSommationCarteMapper.toDto(lettreSommationCarte);
     }
 
     @Transactional
@@ -173,12 +183,15 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
     public LettreSommationCarteResponse updateLettreSommationCarte(
             Long id, LettreSommationCarteRequest request, List<MultipartFile> fichiers) {
 
-        // Get current user (encadrant)
-        UtilisateurSysteme currentUser = (UtilisateurSysteme) SecurityContextHolder
-                .getContext().getAuthentication().getPrincipal();
+        // Validate permissions and get current user
+        utilisateurService.validateCanUpdate();
+        UtilisateurSysteme currentUser = utilisateurService.getCurrentUser();
 
         LettreSommationCarte lettreSommationCarte = lettreSommationCarteRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lettre de sommation carte non trouvée avec l'id: " + id));
+
+        // Additional check: if user is ENCADRANT, they can only modify their own documents
+        utilisateurService.validateCanEditDocument(lettreSommationCarte.getUtilisateur());
 
         // Check if another lettre with the same numeroCarte already exists
         if (!lettreSommationCarte.getNumeroCarte().equals(request.getNumeroCarte()) &&
@@ -197,12 +210,13 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
         if (fichiers != null && !fichiers.isEmpty()) {
             try {
                 // Delete existing files from storage
-                for (PieceJointe piece : lettreSommationCarte.getPiecesJointes()) {
-                    fileStorageService.deleteFile(piece.getCheminFichier());
-                }
+                List<PieceJointe> existingPieces = pieceJointeRepository.findByTypeDocumentAndDocumentId(
+                        TypeDocumentEnum.LETTRE_CARTE, id);
 
-                // Clear the existing pieces jointes
-                lettreSommationCarte.getPiecesJointes().clear();
+                for (PieceJointe piece : existingPieces) {
+                    fileStorageService.deleteFile(piece.getCheminFichier());
+                    pieceJointeRepository.delete(piece);
+                }
 
                 // Add new pieces jointes
                 for (MultipartFile fichier : fichiers) {
@@ -216,9 +230,10 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
                                 .cheminFichier(fileName)
                                 .typeMime(fichier.getContentType())
                                 .taille(fichier.getSize())
+                                .dateUpload(LocalDateTime.now())
                                 .build();
 
-                        lettreSommationCarte.addPieceJointe(pieceJointe);
+                        pieceJointeRepository.save(pieceJointe);
                     }
                 }
 
@@ -227,7 +242,7 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
                         TypeDocumentEnum.LETTRE_CARTE,
                         id,
                         currentUser,
-                        "Mise à jour des fichiers",
+                        "MISE_A_JOUR_FICHIERS",
                         "Nouveaux fichiers ajoutés: " + fichiers.size(),
                         null,
                         null
@@ -267,28 +282,28 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
         }
 
         // Map to response
-        LettreSommationCarteResponse response = lettreSommationCarteMapper.toDto(lettreSommationCarte);
-
-        return response;
+        return lettreSommationCarteMapper.toDto(lettreSommationCarte);
     }
 
     @Transactional
     @Override
     public void deleteLettreSommationCarte(Long id) {
+        // Validate permissions and get current user
+        utilisateurService.validateCanDelete();
+        UtilisateurSysteme currentUser = utilisateurService.getCurrentUser();
+
         LettreSommationCarte lettreSommationCarte = lettreSommationCarteRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lettre de sommation carte non trouvée avec l'id: " + id));
 
-        // Get current user (encadrant)
-        UtilisateurSysteme currentUser = (UtilisateurSysteme) SecurityContextHolder
-                .getContext().getAuthentication().getPrincipal();
-
         // Delete file attachments
         try {
-            for (PieceJointe piece : lettreSommationCarte.getPiecesJointes()) {
-                fileStorageService.deleteFile(piece.getCheminFichier());
-            }
+            List<PieceJointe> piecesJointes = pieceJointeRepository.findByTypeDocumentAndDocumentId(
+                    TypeDocumentEnum.LETTRE_CARTE, id);
 
-            // The pieces jointes will be deleted automatically due to CascadeType.ALL and orphanRemoval=true
+            for (PieceJointe piece : piecesJointes) {
+                fileStorageService.deleteFile(piece.getCheminFichier());
+                pieceJointeRepository.delete(piece);
+            }
         } catch (IOException e) {
             throw new RuntimeException("Erreur lors de la suppression des fichiers", e);
         }
@@ -316,9 +331,9 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
                 notificationService.createNotification(
                         supervisor,
                         TypeNotificationEnum.ALERTE,
-                        "Une lettre de sommation (carte) a été supprimée pour l'agent " +
-                                lettreSommationCarte.getAct().getNomPrenom() + " (Matricule: " +
-                                lettreSommationCarte.getAct().getMatricule() + ")",
+                        "Une lettre de sommation (carte) a été supprimée par " + currentUser.getNomPrenom() +
+                                " pour l'agent " + lettreSommationCarte.getAct().getNomPrenom() +
+                                " (Matricule: " + lettreSommationCarte.getAct().getMatricule() + ")",
                         "/documents/lettre-carte"
                 );
             }
@@ -401,15 +416,15 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
     @Transactional
     @Override
     public List<LettreSommationCarteResponse> updateBulkStatus(BulkUpdateStatusRequest request) {
+        // Validate permissions and get current user
+        utilisateurService.validateCanUpdateBulkStatus();
+        UtilisateurSysteme currentUser = utilisateurService.getCurrentUser();
+
         List<LettreSommationCarte> lettres = lettreSommationCarteRepository.findAllById(request.getIds());
 
         if (lettres.size() != request.getIds().size()) {
             throw new ResourceNotFoundException("Une ou plusieurs lettres de sommation carte n'ont pas été trouvées");
         }
-
-        // Get current user (encadrant)
-        UtilisateurSysteme currentUser = (UtilisateurSysteme) SecurityContextHolder
-                .getContext().getAuthentication().getPrincipal();
 
         for (LettreSommationCarte lettre : lettres) {
             // Store old status
@@ -422,8 +437,8 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
             if (request.getCommentaire() != null && !request.getCommentaire().isEmpty()) {
                 String existingComments = lettre.getCommentaires() != null ? lettre.getCommentaires() : "";
                 String dateStr = LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-                String newComment = dateStr + " - Changement de statut à " + request.getNewStatus() + ": "
-                        + request.getCommentaire();
+                String newComment = dateStr + " - Changement de statut à " + request.getNewStatus() +
+                        " par " + currentUser.getNomPrenom() + ": " + request.getCommentaire();
 
                 if (!existingComments.isEmpty()) {
                     existingComments += "\n\n";
@@ -456,11 +471,32 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
         lettres = lettreSommationCarteRepository.saveAll(lettres);
 
         // Map to responses
-        List<LettreSommationCarteResponse> responses = lettres.stream()
+        return lettres.stream()
                 .map(lettreSommationCarteMapper::toDto)
                 .collect(Collectors.toList());
+    }
 
-        return responses;
+    private void notifyDocumentCreation(LettreSommationCarte lettre) {
+        if (lettre.getAct() != null &&
+                lettre.getAct().getAntenne() != null &&
+                lettre.getAct().getAntenne().getSection() != null) {
+
+            List<UtilisateurSysteme> supervisors = utilisateurSystemeRepository
+                    .findByRoleAndAntenneSection(RoleUtilisateur.SUPERVISEUR,
+                            lettre.getAct().getAntenne().getSection());
+
+            for (UtilisateurSysteme supervisor : supervisors) {
+                notificationService.createNotification(
+                        supervisor,
+                        TypeNotificationEnum.INFO,
+                        "Une nouvelle lettre de sommation (carte) a été créée par " +
+                                lettre.getUtilisateur().getNomPrenom() + " pour l'agent " +
+                                lettre.getAct().getNomPrenom() + " (Matricule: " +
+                                lettre.getAct().getMatricule() + ")",
+                        "/documents/lettre-carte/" + lettre.getId()
+                );
+            }
+        }
     }
 
     private void notifyStatusChange(LettreSommationCarte lettre, String oldStatus, String newStatus) {

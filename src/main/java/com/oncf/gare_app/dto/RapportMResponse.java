@@ -1,32 +1,30 @@
 package com.oncf.gare_app.dto;
 
 import com.oncf.gare_app.enums.CategorieRapportEnum;
-import com.oncf.gare_app.enums.StatutEnum;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class RapportMResponse {
     private Long id;
-    private ACTResponse act;
+    private String references;
+    private LocalDate dateEnvoi;
+    private LocalDate dateReception;
+    private String objet;
     private CategorieRapportEnum categorie;
-    private LocalDate dateCreation;
-    private String titre;
-    private String contenu;
-    private Integer priorite;
-    private StatutEnum statut;
-    private LocalDate dateTraitement;
-    private UtilisateurResponse utilisateur;
+    private String detail;
+    private ACTResponse act;  // Following working pattern
+    private TrainResponse train;  // Following working pattern
+    private LocalDate dateTrain;
+    private UtilisateurResponse utilisateur;  // Following working pattern
     private LocalDateTime dateCreationSysteme;
     private LocalDateTime dateDerniereModification;
-    private List<PieceJointeResponse> piecesJointes;
+    private List<PieceJointeResponse> piecesJointes;  // Following working pattern
 }

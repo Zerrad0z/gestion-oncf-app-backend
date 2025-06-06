@@ -2,27 +2,81 @@ package com.oncf.gare_app.mapper;
 
 import com.oncf.gare_app.dto.RapportMRequest;
 import com.oncf.gare_app.dto.RapportMResponse;
+import com.oncf.gare_app.dto.PieceJointeResponse;
 import com.oncf.gare_app.entity.ACT;
 import com.oncf.gare_app.entity.RapportM;
+import com.oncf.gare_app.entity.PieceJointe;
+import com.oncf.gare_app.entity.Train;
 import com.oncf.gare_app.entity.UtilisateurSysteme;
+import com.oncf.gare_app.enums.TypeDocumentEnum;
 import com.oncf.gare_app.repository.ACTRepository;
+import com.oncf.gare_app.repository.TrainRepository;
+import com.oncf.gare_app.repository.PieceJointeRepository;
 import org.mapstruct.*;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.core.context.SecurityContextHolder;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Mapper(componentModel = "spring",
-        uses = {ACTMapper.class, UtilisateurMapper.class, PieceJointeMapper.class})
+        uses = {ACTMapper.class, TrainMapper.class, UtilisateurMapper.class, PieceJointeMapper.class})
+//           ^^^^^^^^^^^^^ ADDED: TrainMapper was missing!
 public abstract class RapportMMapper {
 
     @Autowired
     protected ACTRepository actRepository;
 
+    @Autowired
+    protected TrainRepository trainRepository;
+
+    @Autowired
+    protected PieceJointeRepository pieceJointeRepository;
+
+    @Autowired
+    protected PieceJointeMapper pieceJointeMapper;
+
+    // ✅ FIXED: Remove ignore for piecesJointes since we handle it in @AfterMapping
     @Mapping(target = "piecesJointes", ignore = true)
     public abstract RapportMResponse toDto(RapportM entity);
 
+    @AfterMapping
+    protected void loadPiecesJointes(@MappingTarget RapportMResponse response, RapportM entity) {
+        if (entity.getId() != null) {
+            // Load pieces jointes using the polymorphic relationship
+            List<PieceJointe> piecesJointes = pieceJointeRepository.findByTypeDocumentAndDocumentId(
+                    TypeDocumentEnum.RAPPORT_M, entity.getId());
+
+            if (piecesJointes != null && !piecesJointes.isEmpty()) {
+                List<PieceJointeResponse> piecesJointesDto = piecesJointes.stream()
+                        .map(pieceJointeMapper::toDto)
+                        .collect(Collectors.toList());
+
+                response.setPiecesJointes(piecesJointesDto);
+
+                // Enhanced debugging
+                System.out.println("✅ Loaded " + piecesJointesDto.size() + " pieces jointes for RapportM ID: " + entity.getId());
+            } else {
+                System.out.println("⚠️ No pieces jointes found for RapportM ID: " + entity.getId());
+            }
+        }
+    }
+
+    // ✅ ENHANCED: Add debug logging to see what's being mapped
+    @AfterMapping
+    protected void debugMapping(@MappingTarget RapportMResponse response, RapportM entity) {
+        System.out.println("=== MAPPER DEBUG ===");
+        System.out.println("Entity ID: " + entity.getId());
+        System.out.println("Entity ACT: " + (entity.getAct() != null ? entity.getAct().getNomPrenom() : "NULL"));
+        System.out.println("Entity Train: " + (entity.getTrain() != null ? entity.getTrain().getNumero() : "NULL"));
+        System.out.println("Response ACT: " + (response.getAct() != null ? response.getAct().getNomPrenom() : "NULL"));
+        System.out.println("Response Train: " + (response.getTrain() != null ? response.getTrain().getNumero() : "NULL"));
+        System.out.println("==================");
+    }
+
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "act", source = "actId", qualifiedByName = "mapRapportActId")
-    @Mapping(target = "utilisateur", expression = "java(getCurrentUser())")
+    @Mapping(target = "train", source = "trainId", qualifiedByName = "mapRapportTrainId")
+    @Mapping(target = "utilisateur", ignore = true) // Set manually in service
     @Mapping(target = "dateCreationSysteme", ignore = true)
     @Mapping(target = "dateDerniereModification", ignore = true)
     @Mapping(target = "piecesJointes", ignore = true)
@@ -30,17 +84,24 @@ public abstract class RapportMMapper {
 
     @Named("mapRapportActId")
     protected ACT mapRapportActId(Long actId) {
-        return actRepository.findById(actId)
+        ACT act = actRepository.findById(actId)
                 .orElseThrow(() -> new RuntimeException("ACT non trouvé avec l'id: " + actId));
+        System.out.println("✅ Mapped ACT ID " + actId + " to: " + act.getNomPrenom());
+        return act;
     }
 
-    protected UtilisateurSysteme getCurrentUser() {
-        return (UtilisateurSysteme) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    @Named("mapRapportTrainId")
+    protected Train mapRapportTrainId(Long trainId) {
+        Train train = trainRepository.findById(trainId)
+                .orElseThrow(() -> new RuntimeException("Train non trouvé avec l'id: " + trainId));
+        System.out.println("✅ Mapped Train ID " + trainId + " to: " + train.getNumero());
+        return train;
     }
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "act", source = "actId", qualifiedByName = "mapRapportActId")
+    @Mapping(target = "train", source = "trainId", qualifiedByName = "mapRapportTrainId")
     @Mapping(target = "dateCreationSysteme", ignore = true)
     @Mapping(target = "dateDerniereModification", ignore = true)
     @Mapping(target = "utilisateur", ignore = true)

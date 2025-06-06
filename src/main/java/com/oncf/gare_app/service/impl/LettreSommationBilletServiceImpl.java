@@ -41,7 +41,6 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
     @PersistenceContext
     private EntityManager entityManager;
 
-
     private final LettreSommationBilletRepository lettreSommationBilletRepository;
     private final PieceJointeRepository pieceJointeRepository;
     private final LettreSommationBilletMapper lettreSommationBilletMapper;
@@ -51,6 +50,7 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
     private final NotificationService notificationService;
     private final UtilisateurSystemeRepository utilisateurSystemeRepository;
     private final FileValidationService fileValidationService;
+    private final UtilisateurService utilisateurService; // Added
 
     @Transactional(readOnly = true)
     @Override
@@ -58,6 +58,18 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
         List<LettreSommationBilletResponse> responses = lettreSommationBilletRepository.findAll().stream()
                 .map(lettreSommationBilletMapper::toDto)
                 .collect(Collectors.toList());
+
+        // Load piece jointes for each lettre
+        for (LettreSommationBilletResponse response : responses) {
+            List<PieceJointe> piecesJointes = pieceJointeRepository.findByTypeDocumentAndDocumentId(
+                    TypeDocumentEnum.LETTRE_BILLET, response.getId());
+
+            List<PieceJointeResponse> pieceJointeResponses = piecesJointes.stream()
+                    .map(pieceJointeMapper::toDto)
+                    .collect(Collectors.toList());
+
+            response.setPiecesJointes(pieceJointeResponses);
+        }
 
         return responses;
     }
@@ -70,64 +82,36 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
 
         LettreSommationBilletResponse response = lettreSommationBilletMapper.toDto(lettreSommationBillet);
 
+        // Load piece jointes
+        List<PieceJointe> piecesJointes = pieceJointeRepository.findByTypeDocumentAndDocumentId(
+                TypeDocumentEnum.LETTRE_BILLET, id);
+
+        List<PieceJointeResponse> pieceJointeResponses = piecesJointes.stream()
+                .map(pieceJointeMapper::toDto)
+                .collect(Collectors.toList());
+
+        response.setPiecesJointes(pieceJointeResponses);
+
         return response;
     }
-
-    // In LettreSommationBilletServiceImpl when creating a new document
-//    @Transactional
-//    @Override
-//    public LettreSommationBilletResponse createLettreSommationBillet(
-//            LettreSommationBilletRequest request, List<MultipartFile> fichiers) {
-//
-//        // Get current user (encadrant)
-//        UtilisateurSysteme currentUser = (UtilisateurSysteme) SecurityContextHolder
-//                .getContext().getAuthentication().getPrincipal();
-//
-//        // Create lettre sommation
-//        LettreSommationBillet lettreSommationBillet = lettreSommationBilletMapper.toEntity(request);
-//        lettreSommationBillet = lettreSommationBilletRepository.save(lettreSommationBillet);
-//
-//        // Process file uploads and other operations...
-//
-//        // Notify supervisors about the new document
-//        if (lettreSommationBillet.getAct() != null &&
-//                lettreSommationBillet.getAct().getAntenne() != null &&
-//                lettreSommationBillet.getAct().getAntenne().getSection() != null) {
-//
-//            List<UtilisateurSysteme> supervisors = utilisateurSystemeRepository
-//                    .findByRoleAndAntenneSection(RoleUtilisateur.SUPERVISEUR,
-//                            lettreSommationBillet.getAct().getAntenne().getSection());
-//
-//            for (UtilisateurSysteme supervisor : supervisors) {
-//                notificationService.createNotification(
-//                        supervisor,
-//                        TypeNotificationEnum.INFO,
-//                        "Nouvelle lettre de sommation (billet) créée pour l'agent " +
-//                                lettreSommationBillet.getAct().getNomPrenom() + " (Matricule: " +
-//                                lettreSommationBillet.getAct().getMatricule() + ")",
-//                        "/documents/lettre-billet/" + lettreSommationBillet.getId()
-//                );
-//            }
-//        }
-//
-//        return lettreSommationBilletMapper.toDto(lettreSommationBillet);
-//    }
-    // Updated createLettreSommationBillet method in LettreSommationBilletServiceImpl
-
-    // Updated createLettreSommationBillet method in LettreSommationBilletServiceImpl
 
     @Transactional
     @Override
     public LettreSommationBilletResponse createLettreSommationBillet(
             LettreSommationBilletRequest request, List<MultipartFile> fichiers) {
 
-        // Get the test user from the database
-        UtilisateurSysteme testUser = utilisateurSystemeRepository.findByNomUtilisateur("testuser")
-                .orElseThrow(() -> new RuntimeException("Test user not found. Please create a 'testuser' in the database."));
+        // Validate permissions and get current user
+        utilisateurService.validateCanCreate();
+        UtilisateurSysteme currentUser = utilisateurService.getCurrentUser();
 
-        // Create lettre sommation with the test user
+        // Check if a lettre with the same numeroBillet already exists
+        if (lettreSommationBilletRepository.existsByNumeroBillet(request.getNumeroBillet())) {
+            throw new RuntimeException("Une lettre de sommation billet avec le numéro " + request.getNumeroBillet() + " existe déjà");
+        }
+
+        // Create lettre sommation with current user
         LettreSommationBillet lettreSommationBillet = lettreSommationBilletMapper.toEntity(request);
-        lettreSommationBillet.setUtilisateur(testUser);
+        lettreSommationBillet.setUtilisateur(currentUser);
 
         // Save the entity FIRST to get the ID
         lettreSommationBillet = lettreSommationBilletRepository.save(lettreSommationBillet);
@@ -136,7 +120,8 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
         entityManager.flush();
 
         // Log the saved entity for debugging
-        System.out.println("Saved LettreSommationBillet with ID: " + lettreSommationBillet.getId());
+        System.out.println("Saved LettreSommationBillet with ID: " + lettreSommationBillet.getId() +
+                " by user: " + currentUser.getNomUtilisateur());
 
         // Process file uploads if provided
         if (fichiers != null && !fichiers.isEmpty()) {
@@ -152,10 +137,10 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
                         // Store file and get path
                         String fileName = fileStorageService.storeFile(fichier, "lettre-billet-" + lettreSommationBillet.getId());
 
-                        // Create PieceJointe entity - Make sure to use the correct document ID
+                        // Create PieceJointe entity
                         PieceJointe pieceJointe = PieceJointe.builder()
                                 .typeDocument(TypeDocumentEnum.LETTRE_BILLET)
-                                .documentId(lettreSommationBillet.getId()) // This should be the LettreSommationBillet ID
+                                .documentId(lettreSommationBillet.getId())
                                 .nomFichier(fichier.getOriginalFilename())
                                 .cheminFichier(fileName)
                                 .typeMime(fichier.getContentType())
@@ -184,24 +169,44 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
             }
         }
 
-        // Return the DTO - your mapper will handle loading pieces jointes via the @AfterMapping
+        // Track document creation
+        historiqueService.trackDocumentCreation(
+                TypeDocumentEnum.LETTRE_BILLET,
+                lettreSommationBillet.getId(),
+                currentUser
+        );
+
+        // Notify supervisors about new document creation
+        notifyDocumentCreation(lettreSommationBillet);
+
+        // Return the DTO
         return lettreSommationBilletMapper.toDto(lettreSommationBillet);
     }
 
-    // Updated updateLettreSommationBillet method
     @Transactional
     @Override
     public LettreSommationBilletResponse updateLettreSommationBillet(
             Long id, LettreSommationBilletRequest request, List<MultipartFile> fichiers) {
 
+        // Validate permissions and get current user
+        utilisateurService.validateCanUpdate();
+        UtilisateurSysteme currentUser = utilisateurService.getCurrentUser();
+
         LettreSommationBillet lettreSommationBillet = lettreSommationBilletRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lettre de sommation billet non trouvée avec l'id: " + id));
+
+        // Additional check: if user is ENCADRANT, they can only modify their own documents
+        utilisateurService.validateCanEditDocument(lettreSommationBillet.getUtilisateur());
 
         // Check if another lettre with the same numeroBillet already exists
         if (!lettreSommationBillet.getNumeroBillet().equals(request.getNumeroBillet()) &&
                 lettreSommationBilletRepository.existsByNumeroBillet(request.getNumeroBillet())) {
             throw new RuntimeException("Une lettre de sommation billet avec le numéro " + request.getNumeroBillet() + " existe déjà");
         }
+
+        // Store old status for history tracking
+        String oldStatus = lettreSommationBillet.getStatut() != null ?
+                lettreSommationBillet.getStatut().toString() : null;
 
         // Update entity fields
         lettreSommationBilletMapper.updateEntityFromDto(request, lettreSommationBillet);
@@ -256,6 +261,17 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
                 // Update the relationship
                 lettreSommationBillet.setPiecesJointes(newPiecesJointes);
 
+                // Track file uploads
+                historiqueService.trackDocumentAction(
+                        TypeDocumentEnum.LETTRE_BILLET,
+                        id,
+                        currentUser,
+                        "MISE_A_JOUR_FICHIERS",
+                        "Nouveaux fichiers ajoutés: " + fichiers.size(),
+                        null,
+                        null
+                );
+
             } catch (IOException e) {
                 throw new RuntimeException("Erreur lors de la mise à jour des fichiers", e);
             }
@@ -264,20 +280,64 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
         // Save the updated entity
         lettreSommationBillet = lettreSommationBilletRepository.save(lettreSommationBillet);
 
+        // Track document update
+        historiqueService.trackDocumentUpdate(
+                TypeDocumentEnum.LETTRE_BILLET,
+                id,
+                currentUser,
+                "Mise à jour générale"
+        );
+
+        // Track status change if applicable
+        String newStatus = lettreSommationBillet.getStatut() != null ?
+                lettreSommationBillet.getStatut().toString() : null;
+
+        if (oldStatus != null && newStatus != null && !oldStatus.equals(newStatus)) {
+            historiqueService.trackDocumentStatusChange(
+                    TypeDocumentEnum.LETTRE_BILLET,
+                    lettreSommationBillet.getId(),
+                    currentUser,
+                    oldStatus,
+                    newStatus,
+                    "Changement de statut"
+            );
+
+            // Notify relevant users about status change
+            notifyStatusChange(lettreSommationBillet, oldStatus, newStatus);
+        }
+
         return lettreSommationBilletMapper.toDto(lettreSommationBillet);
     }
 
     @Transactional
     @Override
     public void deleteLettreSommationBillet(Long id) {
+        // Validate permissions and get current user
+        utilisateurService.validateCanDelete();
+        UtilisateurSysteme currentUser = utilisateurService.getCurrentUser();
+
         LettreSommationBillet lettreSommationBillet = lettreSommationBilletRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lettre de sommation billet non trouvée avec l'id: " + id));
 
-        // Get current user
-        UtilisateurSysteme currentUser = (UtilisateurSysteme) SecurityContextHolder
-                .getContext().getAuthentication().getPrincipal();
+        // Delete file attachments
+        try {
+            List<PieceJointe> piecesJointes = pieceJointeRepository.findByTypeDocumentAndDocumentId(
+                    TypeDocumentEnum.LETTRE_BILLET, id);
 
-        // Process file deletion and other operations...
+            for (PieceJointe piece : piecesJointes) {
+                fileStorageService.deleteFile(piece.getCheminFichier());
+                pieceJointeRepository.delete(piece);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Erreur lors de la suppression des fichiers", e);
+        }
+
+        // Track document deletion
+        historiqueService.trackDocumentDeletion(
+                TypeDocumentEnum.LETTRE_BILLET,
+                id,
+                currentUser
+        );
 
         // Delete lettre sommation
         lettreSommationBilletRepository.deleteById(id);
@@ -295,9 +355,9 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
                 notificationService.createNotification(
                         supervisor,
                         TypeNotificationEnum.ALERTE,
-                        "Une lettre de sommation (billet) a été supprimée pour l'agent " +
-                                lettreSommationBillet.getAct().getNomPrenom() + " (Matricule: " +
-                                lettreSommationBillet.getAct().getMatricule() + ")",
+                        "Une lettre de sommation (billet) a été supprimée par " + currentUser.getNomPrenom() +
+                                " pour l'agent " + lettreSommationBillet.getAct().getNomPrenom() +
+                                " (Matricule: " + lettreSommationBillet.getAct().getMatricule() + ")",
                         "/documents/lettre-billet"
                 );
             }
@@ -315,6 +375,18 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
                 .stream()
                 .map(lettreSommationBilletMapper::toDto)
                 .collect(Collectors.toList());
+
+        // Load piece jointes for each lettre
+        for (LettreSommationBilletResponse response : responses) {
+            List<PieceJointe> piecesJointes = pieceJointeRepository.findByTypeDocumentAndDocumentId(
+                    TypeDocumentEnum.LETTRE_BILLET, response.getId());
+
+            List<PieceJointeResponse> pieceJointeResponses = piecesJointes.stream()
+                    .map(pieceJointeMapper::toDto)
+                    .collect(Collectors.toList());
+
+            response.setPiecesJointes(pieceJointeResponses);
+        }
 
         return responses;
     }
@@ -368,15 +440,15 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
     @Transactional
     @Override
     public List<LettreSommationBilletResponse> updateBulkStatus(BulkUpdateStatusRequest request) {
+        // Validate permissions and get current user
+        utilisateurService.validateCanUpdateBulkStatus();
+        UtilisateurSysteme currentUser = utilisateurService.getCurrentUser();
+
         List<LettreSommationBillet> lettres = lettreSommationBilletRepository.findAllById(request.getIds());
 
         if (lettres.size() != request.getIds().size()) {
             throw new ResourceNotFoundException("Une ou plusieurs lettres de sommation billet n'ont pas été trouvées");
         }
-
-        // Get current user
-        UtilisateurSysteme currentUser = (UtilisateurSysteme) SecurityContextHolder
-                .getContext().getAuthentication().getPrincipal();
 
         for (LettreSommationBillet lettre : lettres) {
             // Store old status
@@ -389,8 +461,8 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
             if (request.getCommentaire() != null && !request.getCommentaire().isEmpty()) {
                 String existingComments = lettre.getCommentaires() != null ? lettre.getCommentaires() : "";
                 String dateStr = LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-                String newComment = dateStr + " - Changement de statut à " + request.getNewStatus() + ": "
-                        + request.getCommentaire();
+                String newComment = dateStr + " - Changement de statut à " + request.getNewStatus() +
+                        " par " + currentUser.getNomPrenom() + ": " + request.getCommentaire();
 
                 if (!existingComments.isEmpty()) {
                     existingComments += "\n\n";
@@ -428,6 +500,29 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
                 .collect(Collectors.toList());
 
         return responses;
+    }
+
+    private void notifyDocumentCreation(LettreSommationBillet lettre) {
+        if (lettre.getAct() != null &&
+                lettre.getAct().getAntenne() != null &&
+                lettre.getAct().getAntenne().getSection() != null) {
+
+            List<UtilisateurSysteme> supervisors = utilisateurSystemeRepository
+                    .findByRoleAndAntenneSection(RoleUtilisateur.SUPERVISEUR,
+                            lettre.getAct().getAntenne().getSection());
+
+            for (UtilisateurSysteme supervisor : supervisors) {
+                notificationService.createNotification(
+                        supervisor,
+                        TypeNotificationEnum.INFO,
+                        "Une nouvelle lettre de sommation (billet) a été créée par " +
+                                lettre.getUtilisateur().getNomPrenom() + " pour l'agent " +
+                                lettre.getAct().getNomPrenom() + " (Matricule: " +
+                                lettre.getAct().getMatricule() + ")",
+                        "/documents/lettre-billet/" + lettre.getId()
+                );
+            }
+        }
     }
 
     private void notifyStatusChange(LettreSommationBillet lettre, String oldStatus, String newStatus) {

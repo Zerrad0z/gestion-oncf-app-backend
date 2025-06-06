@@ -4,7 +4,6 @@ import com.oncf.gare_app.dto.BulkUpdateStatusRequest;
 import com.oncf.gare_app.dto.RapportMRequest;
 import com.oncf.gare_app.dto.RapportMResponse;
 import com.oncf.gare_app.enums.CategorieRapportEnum;
-import com.oncf.gare_app.enums.StatutEnum;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
@@ -25,10 +24,9 @@ public interface RapportMService {
     List<RapportMResponse> searchRapportsM(
             Long actId,
             CategorieRapportEnum categorie,
-            StatutEnum statut,
-            String titre,
-            String contenu,
-            Integer priorite,
+            String references,
+            String objet,
+            String detail,
             LocalDate dateDebut,
             LocalDate dateFin);
 
@@ -36,11 +34,7 @@ public interface RapportMService {
 
     List<RapportMResponse> getRapportMByCategorie(CategorieRapportEnum categorie);
 
-    List<RapportMResponse> getRapportMByStatut(StatutEnum statut);
-
     List<RapportMResponse> getRapportMByDateRange(LocalDate dateDebut, LocalDate dateFin);
 
-    List<RapportMResponse> getRapportMByPriorite(Integer priorite);
-
-    List<RapportMResponse> updateBulkStatus(BulkUpdateStatusRequest request);
+    List<RapportMResponse> updateBulk(BulkUpdateStatusRequest request);
 }

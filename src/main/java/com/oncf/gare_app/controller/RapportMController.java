@@ -4,7 +4,6 @@ import com.oncf.gare_app.dto.BulkUpdateStatusRequest;
 import com.oncf.gare_app.dto.RapportMRequest;
 import com.oncf.gare_app.dto.RapportMResponse;
 import com.oncf.gare_app.enums.CategorieRapportEnum;
-import com.oncf.gare_app.enums.StatutEnum;
 import com.oncf.gare_app.service.RapportMService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -65,15 +64,14 @@ public class RapportMController {
     public ResponseEntity<List<RapportMResponse>> searchRapportsM(
             @RequestParam(required = false) Long actId,
             @RequestParam(required = false) CategorieRapportEnum categorie,
-            @RequestParam(required = false) StatutEnum statut,
-            @RequestParam(required = false) String titre,
-            @RequestParam(required = false) String contenu,
-            @RequestParam(required = false) Integer priorite,
+            @RequestParam(required = false) String references,
+            @RequestParam(required = false) String objet,
+            @RequestParam(required = false) String detail,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin) {
 
         return ResponseEntity.ok(rapportMService.searchRapportsM(
-                actId, categorie, statut, titre, contenu, priorite, dateDebut, dateFin));
+                actId, categorie, references, objet, detail, dateDebut, dateFin));
     }
 
     @GetMapping("/act/{actId}")
@@ -86,11 +84,6 @@ public class RapportMController {
         return ResponseEntity.ok(rapportMService.getRapportMByCategorie(categorie));
     }
 
-    @GetMapping("/statut/{statut}")
-    public ResponseEntity<List<RapportMResponse>> getRapportMByStatut(@PathVariable StatutEnum statut) {
-        return ResponseEntity.ok(rapportMService.getRapportMByStatut(statut));
-    }
-
     @GetMapping("/dates")
     public ResponseEntity<List<RapportMResponse>> getRapportMByDateRange(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
@@ -99,14 +92,9 @@ public class RapportMController {
         return ResponseEntity.ok(rapportMService.getRapportMByDateRange(dateDebut, dateFin));
     }
 
-    @GetMapping("/priorite/{priorite}")
-    public ResponseEntity<List<RapportMResponse>> getRapportMByPriorite(@PathVariable Integer priorite) {
-        return ResponseEntity.ok(rapportMService.getRapportMByPriorite(priorite));
-    }
-
-    @PutMapping("/bulk/status")
-    public ResponseEntity<List<RapportMResponse>> updateBulkStatus(
+    @PutMapping("/bulk")
+    public ResponseEntity<List<RapportMResponse>> updateBulk(
             @Valid @RequestBody BulkUpdateStatusRequest request) {
-        return ResponseEntity.ok(rapportMService.updateBulkStatus(request));
+        return ResponseEntity.ok(rapportMService.updateBulk(request));
     }
 }
