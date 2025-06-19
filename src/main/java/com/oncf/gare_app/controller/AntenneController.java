@@ -36,12 +36,6 @@ public class AntenneController {
         return ResponseEntity.ok(antenne);
     }
 
-    @GetMapping("/section/{sectionId}")
-    public ResponseEntity<List<AntenneResponseDto>> getAntennesBySection(@PathVariable Long sectionId) {
-        List<AntenneResponseDto> antennes = antenneService.getAntennesBySection(sectionId);
-        return ResponseEntity.ok(antennes);
-    }
-
     @PutMapping("/{id}")
     public ResponseEntity<AntenneResponseDto> updateAntenne(
             @PathVariable Long id,
@@ -55,4 +49,11 @@ public class AntenneController {
         antenneService.deleteAntenne(id);
         return ResponseEntity.noContent().build();
     }
+
+    @GetMapping("/bysection/{sectionId}")
+    public ResponseEntity<List<AntenneResponseDto>> getAntennesBySection(@PathVariable Long sectionId) {
+        List<AntenneResponseDto> antennes = antenneService.getAntennesBySection(sectionId);
+        return ResponseEntity.ok(antennes);
+    }
+
 }

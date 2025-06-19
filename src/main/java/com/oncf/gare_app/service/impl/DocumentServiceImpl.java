@@ -25,9 +25,7 @@ public class DocumentServiceImpl implements DocumentService {
     private final RapportMRepository rapportMRepository;
     private final PieceJointeRepository pieceJointeRepository;
 
-    /**
-     * Gets the associated document for a piece jointe based on its type and ID
-     */
+
     @Override
     public Object getDocumentForPieceJointe(PieceJointe pieceJointe) {
         TypeDocumentEnum typeDocument = pieceJointe.getTypeDocument();
@@ -45,9 +43,7 @@ public class DocumentServiceImpl implements DocumentService {
         }
     }
 
-    /**
-     * Gets the associated document title or identifier for display purposes
-     */
+
     @Override
     public String getDocumentTitle(PieceJointe pieceJointe) {
         TypeDocumentEnum typeDocument = pieceJointe.getTypeDocument();
@@ -55,9 +51,7 @@ public class DocumentServiceImpl implements DocumentService {
         return getDocumentTitle(typeDocument, documentId);
     }
 
-    /**
-     * Gets the associated document title or identifier for display purposes by type and ID
-     */
+
     @Override
     public String getDocumentTitle(TypeDocumentEnum typeDocument, Long documentId) {
         switch (typeDocument) {
@@ -78,9 +72,7 @@ public class DocumentServiceImpl implements DocumentService {
         }
     }
 
-    /**
-     * Checks if a document exists based on its type and ID
-     */
+
     @Override
     public boolean documentExists(TypeDocumentEnum typeDocument, Long documentId) {
         switch (typeDocument) {
@@ -95,28 +87,20 @@ public class DocumentServiceImpl implements DocumentService {
         }
     }
 
-    /**
-     * Gets all pieces jointes for a specific document
-     */
+
     @Override
     public List<PieceJointe> getPiecesJointesForDocument(TypeDocumentEnum typeDocument, Long documentId) {
         return pieceJointeRepository.findByTypeDocumentAndDocumentId(typeDocument, documentId);
     }
 
-    /**
-     * Adds a piece jointe to a document
-     */
+
     @Override
     @Transactional
     public void addPieceJointeToDocument(PieceJointe pieceJointe, TypeDocumentEnum typeDocument, Long documentId) {
-        // The pieceJointe should already have the correct typeDocument and documentId set
-        // when it was created, so we just need to save it
         pieceJointeRepository.save(pieceJointe);
     }
 
-    /**
-     * Removes all pieces jointes from a document
-     */
+
     @Override
     @Transactional
     public void removePiecesJointesFromDocument(TypeDocumentEnum typeDocument, Long documentId) {

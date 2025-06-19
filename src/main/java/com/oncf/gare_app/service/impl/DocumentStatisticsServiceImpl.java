@@ -60,7 +60,6 @@ public class DocumentStatisticsServiceImpl implements DocumentStatisticsService 
 
         // Create storage size by document type map
         Map<String, Long> storageSizeByDocumentType = new HashMap<>();
-        // These would require custom queries, for now just using a placeholder
         storageSizeByDocumentType.put("LETTRE_BILLET", totalStorageSize / 3);
         storageSizeByDocumentType.put("LETTRE_CARTE", totalStorageSize / 3);
         storageSizeByDocumentType.put("RAPPORT_M", totalStorageSize / 3);
@@ -87,8 +86,7 @@ public class DocumentStatisticsServiceImpl implements DocumentStatisticsService 
     @Override
     @Transactional(readOnly = true)
     public DocumentStatisticsResponse getStatisticsByDocumentType(TypeDocumentEnum typeDocument) {
-        // This would be a subset of the overall statistics
-        // For brevity, just returning a placeholder
+
         DocumentStatisticsResponse overall = getOverallStatistics();
 
         // Filter to just the requested document type
@@ -119,8 +117,6 @@ public class DocumentStatisticsServiceImpl implements DocumentStatisticsService 
     @Override
     @Transactional(readOnly = true)
     public DocumentStatisticsResponse getStatisticsByDateRange(LocalDate startDate, LocalDate endDate) {
-        // This would require custom queries based on date ranges
-        // For brevity, just returning a placeholder
         return getOverallStatistics();
     }
 

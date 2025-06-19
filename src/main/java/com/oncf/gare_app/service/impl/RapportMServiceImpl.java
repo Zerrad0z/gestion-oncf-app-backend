@@ -179,11 +179,7 @@ public class RapportMServiceImpl implements RapportMService {
         RapportM rapportM = rapportMRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Rapport M non trouvé avec l'id: " + id));
 
-        // Additional check: if user is ENCADRANT, they can only modify their own documents
         utilisateurService.validateCanEditDocument(rapportM.getUtilisateur());
-
-        // Store old status for history tracking (if applicable)
-        // String oldStatus = rapportM.getStatut() != null ? rapportM.getStatut().toString() : null;
 
         // Update entity fields
         rapportMMapper.updateEntityFromDto(request, rapportM);

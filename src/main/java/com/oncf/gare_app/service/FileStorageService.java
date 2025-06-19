@@ -24,7 +24,6 @@ public interface FileStorageService {
 
     List<PieceJointe> createPiecesJointes(List<MultipartFile> files, TypeDocumentEnum typeDocument, Long documentId) throws IOException;
 
-    // Additional utility methods
     boolean fileExists(String fileName);
 
     long getTotalStorageSize();

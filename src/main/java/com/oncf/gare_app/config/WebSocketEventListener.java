@@ -30,10 +30,6 @@ public class WebSocketEventListener {
 
         if (username != null) {
             logger.info("User Disconnected: {}", username);
-
-            // Example of sending a message when user disconnects
-            // messagingTemplate.convertAndSend("/topic/public",
-            //     new ChatMessage(ChatMessage.MessageType.LEAVE, username, "User left the chat"));
         }
     }
 }

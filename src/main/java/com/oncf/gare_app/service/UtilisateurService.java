@@ -11,7 +11,6 @@ import java.util.List;
 
 public interface UtilisateurService {
 
-    // Existing CRUD methods
     @Transactional(readOnly = true)
     List<UtilisateurResponse> getAllUtilisateurs();
 

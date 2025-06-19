@@ -71,7 +71,6 @@ public class NotificationController {
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<NotificationResponse>> getNotificationsForUser(
             @PathVariable Long userId) {
-        // This endpoint should be restricted to admins or supervisors
         return ResponseEntity.ok(notificationService.getNotificationsForUser(userId));
     }
 }

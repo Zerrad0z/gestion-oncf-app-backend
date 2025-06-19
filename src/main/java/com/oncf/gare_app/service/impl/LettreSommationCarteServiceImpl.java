@@ -143,7 +143,6 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
                                 .dateUpload(LocalDateTime.now())
                                 .build();
 
-                        // Log before saving for debugging
                         System.out.println("About to save PieceJointe: " +
                                 "TypeDocument: " + pieceJointe.getTypeDocument() +
                                 ", DocumentId: " + pieceJointe.getDocumentId() +
@@ -152,7 +151,6 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
                         // Save PieceJointe to database
                         pieceJointe = pieceJointeRepository.save(pieceJointe);
 
-                        // Log after saving for debugging
                         System.out.println("Successfully saved PieceJointe with ID: " + pieceJointe.getId());
                     }
                 }
@@ -190,10 +188,8 @@ public class LettreSommationCarteServiceImpl implements LettreSommationCarteServ
         LettreSommationCarte lettreSommationCarte = lettreSommationCarteRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lettre de sommation carte non trouvée avec l'id: " + id));
 
-        // Additional check: if user is ENCADRANT, they can only modify their own documents
         utilisateurService.validateCanEditDocument(lettreSommationCarte.getUtilisateur());
 
-        // Check if another lettre with the same numeroCarte already exists
         if (!lettreSommationCarte.getNumeroCarte().equals(request.getNumeroCarte()) &&
                 lettreSommationCarteRepository.existsByNumeroCarte(request.getNumeroCarte())) {
             throw new RuntimeException("Une lettre de sommation carte avec le numéro " + request.getNumeroCarte() + " existe déjà");

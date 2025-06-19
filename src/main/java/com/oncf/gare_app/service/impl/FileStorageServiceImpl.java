@@ -153,7 +153,6 @@ public class FileStorageServiceImpl implements FileStorageService {
 
     @Override
     public long getDocumentStorageSize(TypeDocumentEnum typeDocument, Long documentId) {
-        // Use the repository to get the total size of all pieces jointes for this document
         Long totalSize = pieceJointeRepository.getTotalSizeByTypeDocumentAndDocumentId(typeDocument, documentId);
         return totalSize != null ? totalSize : 0L;
     }

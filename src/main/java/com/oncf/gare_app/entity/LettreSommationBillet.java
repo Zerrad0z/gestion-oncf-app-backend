@@ -74,12 +74,10 @@ public class LettreSommationBillet {
     @Column(name = "date_derniere_modification")
     private LocalDateTime dateDerniereModification;
 
-    // Make this transient - loaded separately by mapper
     @Transient
     @Builder.Default
     private List<PieceJointe> piecesJointes = new ArrayList<>();
 
-    // Keep helper methods for convenience
     public void addPieceJointe(PieceJointe pieceJointe) {
         if (this.piecesJointes == null) {
             this.piecesJointes = new ArrayList<>();

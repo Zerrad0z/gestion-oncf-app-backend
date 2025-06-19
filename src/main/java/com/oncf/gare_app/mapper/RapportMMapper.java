@@ -20,7 +20,6 @@ import java.util.stream.Collectors;
 
 @Mapper(componentModel = "spring",
         uses = {ACTMapper.class, TrainMapper.class, UtilisateurMapper.class, PieceJointeMapper.class})
-//           ^^^^^^^^^^^^^ ADDED: TrainMapper was missing!
 public abstract class RapportMMapper {
 
     @Autowired
@@ -35,14 +34,12 @@ public abstract class RapportMMapper {
     @Autowired
     protected PieceJointeMapper pieceJointeMapper;
 
-    // ✅ FIXED: Remove ignore for piecesJointes since we handle it in @AfterMapping
     @Mapping(target = "piecesJointes", ignore = true)
     public abstract RapportMResponse toDto(RapportM entity);
 
     @AfterMapping
     protected void loadPiecesJointes(@MappingTarget RapportMResponse response, RapportM entity) {
         if (entity.getId() != null) {
-            // Load pieces jointes using the polymorphic relationship
             List<PieceJointe> piecesJointes = pieceJointeRepository.findByTypeDocumentAndDocumentId(
                     TypeDocumentEnum.RAPPORT_M, entity.getId());
 
@@ -53,7 +50,6 @@ public abstract class RapportMMapper {
 
                 response.setPiecesJointes(piecesJointesDto);
 
-                // Enhanced debugging
                 System.out.println("✅ Loaded " + piecesJointesDto.size() + " pieces jointes for RapportM ID: " + entity.getId());
             } else {
                 System.out.println("⚠️ No pieces jointes found for RapportM ID: " + entity.getId());
@@ -61,7 +57,6 @@ public abstract class RapportMMapper {
         }
     }
 
-    // ✅ ENHANCED: Add debug logging to see what's being mapped
     @AfterMapping
     protected void debugMapping(@MappingTarget RapportMResponse response, RapportM entity) {
         System.out.println("=== MAPPER DEBUG ===");

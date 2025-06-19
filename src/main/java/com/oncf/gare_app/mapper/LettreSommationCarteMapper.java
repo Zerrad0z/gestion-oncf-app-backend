@@ -34,7 +34,6 @@ public abstract class LettreSommationCarteMapper {
     @Autowired
     protected GareRepository gareRepository;
 
-    // ADD THESE NEW AUTOWIRED FIELDS
     @Autowired
     protected PieceJointeRepository pieceJointeRepository;
 
@@ -44,11 +43,9 @@ public abstract class LettreSommationCarteMapper {
     @Mapping(target = "piecesJointes", ignore = true)
     public abstract LettreSommationCarteResponse toDto(LettreSommationCarte entity);
 
-    // ADD THIS NEW METHOD - This is the key addition!
     @AfterMapping
     protected void loadPiecesJointes(@MappingTarget LettreSommationCarteResponse response, LettreSommationCarte entity) {
         if (entity.getId() != null) {
-            // Load pieces jointes using the polymorphic relationship
             List<PieceJointe> piecesJointes = pieceJointeRepository.findByTypeDocumentAndDocumentId(
                     TypeDocumentEnum.LETTRE_CARTE, entity.getId());
 
@@ -59,7 +56,6 @@ public abstract class LettreSommationCarteMapper {
 
                 response.setPiecesJointes(piecesJointesDto);
 
-                // Log for debugging
                 System.out.println("Loaded " + piecesJointesDto.size() + " pieces jointes for LettreSommationCarte ID: " + entity.getId());
             }
         }

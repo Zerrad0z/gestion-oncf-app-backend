@@ -18,9 +18,7 @@ public interface UtilisateurSystemeRepository extends JpaRepository<UtilisateurS
     boolean existsByNomUtilisateur(String nomUtilisateur);
     boolean existsByEmail(String email);
     boolean existsByMatricule(String matricule);
-    /**
-     * Find users by role and section
-     */
+
     @Query("SELECT u FROM UtilisateurSysteme u " +
             "JOIN u.act a " +
             "JOIN a.antenne ant " +
@@ -29,9 +27,6 @@ public interface UtilisateurSystemeRepository extends JpaRepository<UtilisateurS
             @Param("role") RoleUtilisateur role,
             @Param("section") Section section);
 
-    /**
-     * Find users by role and section ID
-     */
     @Query("SELECT u FROM UtilisateurSysteme u " +
             "JOIN u.act a " +
             "JOIN a.antenne ant " +

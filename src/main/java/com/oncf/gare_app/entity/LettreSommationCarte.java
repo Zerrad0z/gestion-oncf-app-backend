@@ -82,7 +82,6 @@ public class LettreSommationCarte {
     @Column(name = "date_derniere_modification")
     private LocalDateTime dateDerniereModification;
 
-    // Make this transient - loaded separately by mapper
     @Transient
     private List<PieceJointe> piecesJointes = new ArrayList<>();
 

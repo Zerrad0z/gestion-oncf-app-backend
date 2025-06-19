@@ -52,14 +52,8 @@ public class FileController {
                 }
             }
 
-            // Set headers to allow iframe viewing from Angular app
-            response.setHeader("X-Frame-Options", "ALLOWALL"); // or remove this header entirely
+            response.setHeader("X-Frame-Options", "ALLOWALL");
             response.setHeader("Content-Security-Policy", "frame-ancestors http://localhost:4200 http://localhost:3000 'self'");
-
-            // For development, you can also disable frame restrictions entirely:
-            // response.setHeader("X-Frame-Options", "");
-            // response.setHeader("Content-Security-Policy", "frame-ancestors *");
-
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(contentType))
                     .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + pieceJointe.getNomFichier() + "\"")

@@ -20,11 +20,11 @@ public class RapportMResponse {
     private String objet;
     private CategorieRapportEnum categorie;
     private String detail;
-    private ACTResponse act;  // Following working pattern
-    private TrainResponse train;  // Following working pattern
+    private ACTResponse act;
+    private TrainResponse train;
     private LocalDate dateTrain;
-    private UtilisateurResponse utilisateur;  // Following working pattern
+    private UtilisateurResponse utilisateur;
     private LocalDateTime dateCreationSysteme;
     private LocalDateTime dateDerniereModification;
-    private List<PieceJointeResponse> piecesJointes;  // Following working pattern
+    private List<PieceJointeResponse> piecesJointes;
 }

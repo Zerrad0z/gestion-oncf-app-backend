@@ -195,10 +195,8 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
         LettreSommationBillet lettreSommationBillet = lettreSommationBilletRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lettre de sommation billet non trouvée avec l'id: " + id));
 
-        // Additional check: if user is ENCADRANT, they can only modify their own documents
         utilisateurService.validateCanEditDocument(lettreSommationBillet.getUtilisateur());
 
-        // Check if another lettre with the same numeroBillet already exists
         if (!lettreSommationBillet.getNumeroBillet().equals(request.getNumeroBillet()) &&
                 lettreSommationBilletRepository.existsByNumeroBillet(request.getNumeroBillet())) {
             throw new RuntimeException("Une lettre de sommation billet avec le numéro " + request.getNumeroBillet() + " existe déjà");
@@ -223,7 +221,6 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
                     try {
                         fileStorageService.deleteFile(piece.getCheminFichier());
                     } catch (IOException e) {
-                        // Log but don't fail - file might already be deleted
                         System.err.println("Could not delete file: " + piece.getCheminFichier());
                     }
                     pieceJointeRepository.delete(piece);
@@ -557,7 +554,6 @@ public class LettreSommationBilletServiceImpl implements LettreSommationBilletSe
             }
         }
 
-        // Also notify the document creator (encadrant)
         if (lettre.getUtilisateur() != null) {
             notificationService.createNotification(
                     lettre.getUtilisateur(),

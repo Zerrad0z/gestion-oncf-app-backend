@@ -19,7 +19,7 @@ import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
-@Slf4j  // Add this for logging
+@Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
@@ -32,7 +32,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
 
-        // Add comprehensive logging
+
         log.debug("=== JWT Filter Processing ===");
         log.debug("Request: {} {}", request.getMethod(), request.getRequestURI());
 
